@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Autocomplete Date</title>
+	<script type="text/javascript">
+		
+		window.onload = function () {
+			
+			//Options:
+			//--------
+			
+				//Input Box:
+				var input = "auto_date";
+			
+				//Max Options to Display or 0 for Unlimited
+				var optionLimit=0;
+			
+				//Greatest Difference Between Prediction Ratings or 0 for Unlimited
+				//Increaing allows for more options to be displayed; but their prediction accuracy will decrease.
+				var optionDifference=0;
+				
+				//Base Year:
+				//Or "today" for the present year.
+				//var baseYear = "today";
+				var baseYear = "today";
+			
+			//--------
+			
+		
+			
+			var globalDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+			var globalMonths = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+			
+			function findDate(query){
+
+				//Merge Sort
+				function mergeSort(list) {
+					if (list.length <=1) {
+						return list;
+					} else {
+						var middle, i;
+						var left = new Array();
+						var right = new Array();
+						middle = Math.floor(list.length/2);
+						for (i=0;i<middle;i++) {
+							left.push(list[i]);
+						}
+						for (i=middle;i<=list.length-1;i++) {
+							right.push(list[i]);
+						}
+						left = mergeSort(left);
+						right = mergeSort(right);
+						return merge(left,right);
+					}
+				}
+				function merge(left,right) {						
+					var list,result = new Array();
+					while (left.length > 0 || right.length>0) {
+						if (left.length >0 && right.length>0) {
+							if (left.slice(0,1)[0].rating >= right.slice(0,1)[0].rating){
+								result.push(left.shift());
+							} else {
+								result.push(right.shift());
+							}
+						} else if (left.length>0) {
+							result.push(left.shift());
+						} else if (right.length>0) {
+							result.push(right.shift());
+						}
+					}
+					return result;	
+				}
+				var optionsBox = document.getElementById('options');
+				optionsBox.innerHTML = "";
+				optionsBox.style.display="none";
+				
+				var options = new Array();
+				if (query) {	
+					var parts = new Array();
+					
+					//Step 1:
+					//Divide query into parts
+					//Commas, Spaces, and hypens are all separators
+					
+						var separators = ['-',' ',',','.'];
+						var i=0, p=0;
+						while (i<query.length) {
+							for(separator in separators){
+								if (query.charAt(i)==separators[separator]){
+									if (p!=i){
+										parts.push(query.slice(p,i));
+									}
+									p=i+1;
+									break;
+								}
+							}
+							i++;
+						}
+						if (p!=i){
+							parts.push(query.slice(p)); //Gets the last part.
+						}
+					
+					//Step 2:
+					//Go through each part with tester() which runs it through various tests and expressions to determine what
+					//part of the date it is and then add it to the current PossibleDate, cloning it, and adding the clone
+					//to the list of available options for the tester(). Each of those options are then given the next part
+					//with their own tester().
+					
+					
+					function PossibleDate(incomingRating, incomingDay, incomingMonth, incomingDate, incomingYear) {
+						//As stuff gets added increases rating if item is null.
+						this.rating	= (incomingRating	!==undefined)	? incomingRating:0;
+						var day 	= (incomingDay		!==undefined)	? incomingDay	:null;
+						var month 	= (incomingMonth	!==undefined)	? incomingMonth	:null;
+						var date 	= (incomingDate		!==undefined)	? incomingDate	:null;
+						var year 	= (incomingYear		!==undefined)	? incomingYear	:null;
+						var result = "";
+						//Need to verify if the || day==incomingDay.number....etc actually affects rating
+						//Might be voided from elimination of duplicate values later on in the algorithm
+						this.addDay = function(incomingDay){
+							if (day==null || day==incomingDay.number){
+								this.rating++;
+							} 
+							day = incomingDay.number;
+						}
+						
+						this.addMonth = function(incomingMonth) {
+							if (month==null || month==incomingMonth.number) {
+								this.rating++;		
+							}
+							month = incomingMonth.number-1;	
+						}
+						
+						this.addDate = function(incomingDate,modifier) {
+							if (date==null || date == incomingDate) {
+								this.rating++;
+							}
+							if (modifier) {this.rating++;}
+							date = incomingDate;
+						}
+						
+						this.addYear = function(incomingYear) {
+							//If the century marker between the baseYear and incomingYear has a difference greater than 1.
+							if (Math.abs(Math.ceil(baseYear/100)-Math.ceil(incomingYear/100))>1){
+								//If the number of digits in incomingYear is less than baseYear then substring the baseYear and append the incomingYear
+								var lengthDifference = String(baseYear).length-String(incomingYear).length;
+								if (lengthDifference>0) {
+									incomingYear = Number(String(baseYear).substr(0,lengthDifference)+String(incomingYear));
+									this.rating--;
+								} 
+								
+							}
+							
+							if (year==null || year==incomingYear) {
+								this.rating++;
+							}
+							year = incomingYear;
+						}
+						
+						this.clone = function() {
+							return new PossibleDate(this.rating, day, month, date, year);
+						}
+						
+						this.generate = function () {
+							//If month and date are given could assume current or next year and calculate day based on that
+							//If day month and date are given could move forward until a year matches
+							//if given a day then do next day
+							//if given a month then do first of the next month
+							
+							var x= ""+day+" "+month+" "+date+", "+year;
+							//console.warn(x);
+							var fullDate = new Date();
+							if (year!=null) {fullDate.setFullYear(year); }
+							if (month!=null) {fullDate.setMonth(month);}
+							if (date!=null) {fullDate.setDate(date);}
+							
+							
+							//Need to check for dates where date is higher than dates in month.
+							if (date>31)
+							{
+								this.rating=-1;
+								return "-1";
+							} else {
+							
+								if (day!=null) {
+									//No Year
+									if (date!=null && month!=null && year==null) {
+										year = today.getFullYear();
+										while ((day!=fullDate.getDay()||month!=fullDate.getMonth())){
+											//February 29th will go to March 1st, and so both the month and date need to be reset. 
+											year++;
+											fullDate.setFullYear(year);
+											fullDate.setMonth(month,date);							
+										}
+									//No Month
+									} else if (date!=null && year!=null && month==null) {
+										month = 0;
+										while (day!=fullDate.getDay()){
+											fullDate.setYear(year);
+											fullDate.setMonth(month);
+											month++;
+										}
+									//No Date
+									} else if (month!=null && year!=null && date==null) {
+										date=1;
+										while (day!=fullDate.getDay()){
+											fullDate.setDate(date);
+											date++;
+										}
+									//No Year or Month	
+									} else  if (date!=null && month==null && year==null){
+										while (day!=fullDate.getDay()||date!=fullDate.getDate()){
+											month++;
+											fullDate.setMonth(month,date);
+										}
+									//No Date or Month
+									} else if (date==null && month==null && year!=null) {
+										date=today.getDate();
+										month=today.getMonth();
+										while (day!=fullDate.getDay()){
+											fullDate.setMonth(month,date);
+											date++;
+										}
+									//No Date or Year
+									} else if (date==null && year==null && month!=null) {
+										date=1;
+										while (day!=fullDate.getDay()){
+											fullDate.setMonth(month,date);
+											date++;
+										}
+									//Nothing
+									} else if (date==null && year==null && month==null){
+										date=today.getDate();
+										month=today.getMonth();
+										while (day!=fullDate.getDay()){
+											fullDate.setMonth(month,date);
+											date++;
+										}
+									}
+									
+								}
+								console.log(fullDate.getCentury());
+								if (Math.abs(Math.ceil(baseYear/100)-Math.ceil(fullDate.getFullYear()/100))>1){
+									this.rating--;
+								}
+								return globalDays[fullDate.getDay()]+", "+globalMonths[fullDate.getMonth()]+" "+fullDate.getDate()+", "+fullDate.getFullYear();
+								//return ""+fullDate;
+							}
+							
+						}
+						this.output = function() {
+							if (result==false) {
+								result=this.generate();
+							}
+							return result;
+							
+						}
+					}
+					
+					
+					
+					function tester(parent, date, testList){
+						//this.test is the first item fromt the incoming this.testList
+						this.date = date;
+						this.testList = testList;
+						this.test = this.testList.shift();
+						this.depth = parent.depth+1 || 0;
+						this.parent=parent;
+						var modifier = false;
+						var newPossibleDate = false;
+						if (this.test) {
+						//If tester has a test then from the list of viable options for that test and add to the current date, or duplicate it if necessary. Then send each of the dates and the remaining testList to a new tester.
+							
+							this.options= new Array();
+							
+							//Check if digits.
+							if (/^\d+/.test(this.test)){
+							
+								//Check for 1 or 2 digits.
+								if (/^\d{1,2}(\D+|$)/.test(this.test)){
+									//console.log('check');
+									//Test for 1st, 2nd, 3rd, 4th, nth.
+									if (/(s|n|r|t|st|nd|rd|th)$/.test(this.test))
+									{
+										modifier=true;
+									}
+									
+									//Add Date
+									this.test=this.test.replace(/\D+/, '');//remove non digits
+									newPossibleDate = this.date.clone();
+									newPossibleDate.addDate(this.test,modifier);
+									this.options.push(newPossibleDate);
+									
+								}
+							
+								//Add Year						
+								this.test=this.test.replace(/\D+/, '');//remove non digits
+								newPossibleDate = this.date.clone()
+								newPossibleDate.addYear(this.test);
+								
+									this.options.push(newPossibleDate);
+								
+							}
+							
+							
+							
+							var days = [
+								{name:'Sunday', number:0},
+								{name:'Monday', number:1},
+								{name:'Tuesday', number:2},
+								{name:'Wednesday', number:3},
+								{name:'Thursday', number:4},
+								{name:'Friday', number:5},
+								{name:'Saturday', number:6}
+							];
+
+							//february needs formula
+							var months = [
+								{name:"January",	number:1,	length:31},
+								{name:"February",	number:2,	length:29},
+								{name:"March",		number:3,	length:31},
+								{name:"April",		number:4,	length:30},
+								{name:"May",		number:5,	length:31},
+								{name:"June",		number:6,	length:30},
+								{name:"July",		number:7,	length:31},
+								{name:"August",		number:8,	length:31},
+								{name:"September",	number:9,	length:30},
+								{name:"October",	number:10,	length:31},
+								{name:"November",	number:11,	length:30},
+								{name:"December",	number:12,	length:31}
+							]
+							
+							//Various regular expression queries.
+							//	('^'+this.test.toLowerCase()+'+')
+							//		Searches at the beginning because those get higher priority than the middle of the word.
+							//	(this.test.toLowerCase())
+							//		Searches everywhere.
+							
+							//Need to add support for 1st, 2nd, 3rd, 4th, 5th...nth
+							var queryExpressions = [
+								new RegExp('^'+this.test.toLowerCase()+'+'),
+								new RegExp(this.test.toLowerCase()), 
+							];
+							
+							for (queryExpNumber in queryExpressions)
+							{
+								queryExp = queryExpressions[queryExpNumber];		
+								
+								//Test for days of the week.
+								var i=0;
+								while (i<days.length)
+								{
+									if (queryExp.test(days[i].name.toLowerCase())) {
+										newPossibleDate = this.date.clone();
+										newPossibleDate.addDay(days.splice(i,1)[0]);
+										
+											this.options.push(newPossibleDate);
+										
+									
+									} else {
+										i++;
+									}
+								}
+								
+								//Test for the month. 
+								i=0;
+								while (i<months.length)
+								{
+									if (queryExp.test(months[i].name.toLowerCase())) {
+										newPossibleDate = this.date.clone()
+										newPossibleDate.addMonth(months.splice(i,1)[0]);
+										
+											this.options.push(newPossibleDate);
+										
+									} else {
+										i++;
+									}
+								}
+							}
+							//Push the now modified date to the options list.
+							////console.log(this.date);
+							this.options.unshift(this.date);
+							
+							for (var option in this.options)
+							{
+								//By slicing the testList array it prevents it from being sent by reference.
+								this.myTest = new tester(this,this.options[option],this.testList.slice(0));
+							}
+						} else {
+						//If tester doesn't have a test then run up through the chain 
+							listOfPossibleDates.push(this.date)
+						}
+						
+					}
+					
+					listOfPossibleDates = new Array();
+					myTest = new tester('',new PossibleDate(),parts);
+					
+				
+					
+					
+					//Loop through listOfPossibleDates and create a list of their outputs.
+					//If the output is already on the list then you can remove the current item.
+					var possibilities = new Array();
+					var possibleDate=0;
+					var key;
+					while (possibleDate<listOfPossibleDates.length){
+						key = listOfPossibleDates[possibleDate].output()
+						if (possibilities[key]===undefined) {
+							//Key value is possibleDate index.
+							possibilities[key]=possibleDate;
+							possibleDate++;
+						} else {
+							//If stored rating is less than current item rating; replace stored rating.
+							if (listOfPossibleDates[possibilities[key]].rating<listOfPossibleDates[possibleDate].rating) {
+								listOfPossibleDates[possibilities[key]].rating=listOfPossibleDates[possibleDate].rating;
+							}
+							//Delete Current Item
+							listOfPossibleDates.splice(possibleDate,1);
+						} 
+					}
+					
+					//Sort the available options
+					options = mergeSort(listOfPossibleDates);
+					
+				
+					var number=0;
+					var option=0;
+					var startRating = options[0].rating;
+					while ((option<options.length) && ((option<optionLimit) || (optionLimit==0)) && ((startRating-options[option].rating<optionDifference) || (optionDifference==0)) && (options[option].rating>0))
+					//while (option<options.length)
+					{
+						newOption = document.createElement('li');
+						newOptionFunction = (function(me){
+							return function() {
+								console.log(me);
+								selector.select(me);
+								box.value = selector.selected().innerHTML;
+							}
+						})(option);
+						newOption.addEventListener("mousedown",newOptionFunction,false);
+						
+						newOption.innerHTML = options[option].output();
+						optionsBox.appendChild(newOption);
+						option++;
+					}
+				}
+			}
+
+			//Initialize			
+			var today = new Date();
+			
+			if (baseYear == "today"){
+				baseYear = today.getFullYear();
+			}
+			
+			Date.prototype.getCentury = function() {
+				return Math.ceil(this.getFullYear() / 100);
+			};
+			
+			Selector = function () {
+				var value = 0;
+				this.up = function() {
+					erase();
+					value++;
+					write();
+				}
+				this.down = function () {
+					erase();
+					value--;
+					write();
+				}
+				this.clear = function() {
+					value =0;
+					write();
+				}
+				this.select = function(position) {
+					erase();
+					value = position;
+					write();
+					optionsBox.style.display="none";
+				}
+				this.selected = function () {
+					var options = optionsBox.getElementsByTagName('li');
+					optionsBox.style.display="none";
+					return options[value];
+					
+				}
+				function erase() {
+					var options = optionsBox.getElementsByTagName('li');
+					if (options.length) {
+						options[value].className = "";
+					}
+				}
+				function write() {
+					var options = optionsBox.getElementsByTagName('li');
+					if (options.length) {
+						if (value<0) {value=options.length-1;}
+						if (value>options.length-1) {value=0;}
+						options[value].className = "blue";
+						optionsBox.style.display="inline";
+					}
+					
+				}
+			}
+			var selector = new Selector();
+			var userInput = "";
+			
+			//console.log ("Today is "+ today.getDate());
+			box = document.getElementsByClassName(input)[0];
+			var optionsBox = document.getElementById('options');
+			box.addEventListener('keypress',function(e){
+				if (e.which==13) {
+					e.preventDefault();
+				}
+			},false);
+			box.addEventListener('keyup',function(e){
+				//Keyboard Controls:	
+				e = e || window.event;
+				if (e.keyCode == '13') {
+					userInput = box.value;
+					box.value = selector.selected().innerHTML;
+				} else if (e.keyCode == '38') {
+					selector.down();
+				}
+				else if (e.keyCode == '40') {
+					selector.up();
+				} else {
+					
+					findDate(box.value);
+					selector.clear();
+				}
+				
+			},false);
+			box.addEventListener('focus',function() {
+				findDate(box.value);
+				selector.clear();
+			},false);
+			box.addEventListener('blur',function() {
+				optionsBox.innerHTML = "";
+				optionsBox.style.display="none";
+			},false);
+		};
+	</script>
+	<style type="text/css">
+		input {
+			width: 200px;
+			padding:4px;
+			margin:0px;
+			display:block;
+		}
+		ul {
+			padding:0px;
+			margin:0px;
+			padding-left:4px;
+			margin:2px;
+			width:200px;
+			position:absolute;
+			border:1px dotted black;
+			background-color:white;
+			display:none;
+		}
+		li {
+			list-style:none;
+			
+			
+		}
+		.blue {
+			background-color: #666;
+			color:white;
+		}
+	</style>
+</head>
+<body>
+	<form id="red">
+		<input class="auto_date" type="text"></input>
+		<ul id="options"></ul>		
+	</form>
+</body>
+</html>
