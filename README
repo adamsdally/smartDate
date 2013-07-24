@@ -1,6 +1,20 @@
+smartDate
+
+Adam Dally
+adamsdally@yahoo.com
+
 Wednesday, July 24th, 2013
 
-smartDate :)
+smartDate is an in-development date selection algorithm to assist in text date inputs. It is specifically made to feel as natural to the user as possible, and not having a strict date format is at its core. 
 
-by Adam Dally
-adamsdally@yahoo.com
+The algorithm trys to make out even the smallest information, date literals, and even dates that would take you minutes scrolling through the calendar to find. Try typing "Sunday February 29th" and see how it responds.
+
+Due to the flexibity at the script's core it actually allows the script to be extremely efficient and it can be minified to around 6 kilobytes currently.
+
+In Progress:
+	-Setting a base year that all the dates will be centerered around. Example use could be a game that takes place in 1000.
+
+Coming Soon:
+	-Months can not currently be written in digit form
+	-Exact date literals (Today, Tomorrow, Christmas)
+	-Modifying literals (Next, Previous)
